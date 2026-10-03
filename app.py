@@ -142,8 +142,8 @@ with tab1:
                 st.error(f"처리 중 오류가 발생했습니다: {e}")
 
 with tab2:
-    st.subheader("📦 쿠팡 윙(WING) Open API 자동 연동 및 정산")
-    st.write("발급받으신 쿠팡 API 키를 입력하시면, 로켓그로스 판매 및 정산 내역을 자동으로 불러올 수 있습니다.")
+    st.subheader("📦 쿠팡 윙(WING) 로켓그로스 API 자동 연동 및 정산")
+    st.write("발급받으신 쿠팡 API 키를 입력하시면, 로켓그로스 판매 내역을 자동으로 불러올 수 있습니다.")
     
     col_a, col_b, col_c = st.columns(3)
     with col_a:
@@ -156,7 +156,7 @@ with tab2:
     start_dt = st.date_input("조회 시작일", key="coupang_start")
     end_dt = st.date_input("조회 종료일", key="coupang_end")
     
-    if st.button("🔄 쿠팡 로켓그로스 데이터 자동 조회", type="primary"):
+    if st.button("🔄 로켓그로스 데이터 자동 조회", type="primary"):
         if not vendor_id or not access_key or not secret_key:
             st.error("업체코드, Access Key, Secret Key를 모두 입력해 주세요!")
         else:
@@ -169,7 +169,8 @@ with tab2:
                     return authorization
 
                 method = "GET"
-                path = f"/v2/providers/openapi/apis/api/v4/vendors/{vendor_id}/orders"
+                # 로켓그로스 전용 API 경로로 수정 완료
+                path = f"/v2/providers/rg_open_api/apis/api/v1/vendors/{vendor_id}/rg/orders"
                 query = f"createdAtFrom={start_dt.strftime('%Y-%m-%d')}&createdAtTo={end_dt.strftime('%Y-%m-%d')}"
                 
                 auth_header = generate_signature(method, path, query)
@@ -182,13 +183,13 @@ with tab2:
                 
                 url = f"https://api-gateway.coupang.com{path}?{query}"
                 
-                with st.spinner("쿠팡 서버에서 데이터를 불러오는 중입니다..."):
+                with st.spinner("쿠팡 로켓그로스 서버에서 데이터를 불러오는 중입니다..."):
                     response = requests.get(url, headers=headers)
                     if response.status_code == 200:
                         data = response.json()
                         st.success("🎉 쿠팡 로켓그로스 데이터를 성공적으로 불러왔습니다!")
                         st.json(data)
                     else:
-                        st.warning(f"쿠팡 API 응답 코드: {response.status_code}. 입력하신 API 키와 권한을 확인해주세요. (응답: {response.text})")
+                        st.warning(f"쿠팡 API 응답 코드: {response.status_code}. 입력하신 업체코드와 키를 다시 확인해주세요. (응답: {response.text})")
             except Exception as e:
                 st.error(f"API 연동 중 오류 발생: {e}")
