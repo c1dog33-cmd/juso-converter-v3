@@ -6,13 +6,8 @@ from PIL import Image
 st.title("🛒 알리 ➡️ 쿠팡 상세페이지 자동 생성기")
 st.write("알리익스프레스 상품 이미지와 원본 텍스트를 넣으면 쿠팡 맞춤형 상세페이지 기획안을 만들어 줍니다.")
 
-# 2. 새로고침해도 API 키가 유지되도록 세션 저장 기능 추가
-if "api_key" not in st.session_state:
-    st.session_state.api_key = ""
-
-api_key = st.text_input("Gemini API Key를 입력하세요", value=st.session_state.api_key, type="password")
-if api_key:
-    st.session_state.api_key = api_key
+# 2. API 키 자동 설정 (입력창 제거 버전)
+API_KEY = "AQ.Ab8RN6Jj5EVpfwmxmj4BOwLSiNLiApZOTE5_NSbb9RKgz7f0Vw"
 
 # 3. 파일 업로드 및 텍스트 입력창 만들기
 uploaded_file = st.file_uploader("알리 상품 이미지를 업로드하세요", type=["jpg", "jpeg", "png"])
@@ -20,14 +15,12 @@ chinese_text = st.text_area("알리 상품 원본 텍스트(중국어 또는 영
 
 # 4. 버튼을 누르면 실행되는 로직
 if st.button("상세페이지 기획안 생성하기"):
-    if not st.session_state.api_key:
-        st.error("API 키를 먼저 입력해주세요!")
-    elif not uploaded_file:
+    if not uploaded_file:
         st.error("알리 상품 이미지를 업로드해주세요!")
     else:
         try:
-            # Gemini 클라이언트 초기화 (저장된 키 사용)
-            client = genai.Client(api_key=st.session_state.api_key)
+            # Gemini 클라이언트 초기화
+            client = genai.Client(api_key=API_KEY)
             img = Image.open(uploaded_file)
 
             with st.spinner("AI가 알리 상품을 분석하고 쿠팡 스타일 기획안을 작성중입니다..."):
