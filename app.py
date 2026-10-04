@@ -9,19 +9,19 @@ st.set_page_config(page_title="쿠팡 스마트폰 케이스 상세페이지 생
 st.title("🛒 쿠팡 스마트폰 케이스 상세페이지 자동 생성기")
 st.write("폰케이스 전문 스타일(BT Clear PRO 스타일)의 깔끔하고 가독성 높은 상세페이지를 빌드합니다.")
 
-# 2. API 키 자동 로드 (스트림릿 Secrets 보관함 우선 탐색)
-API_KEY = ""
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        API_KEY = st.secrets["GEMINI_API_KEY"]
-except Exception:
-    pass
+# 2. 세션 상태를 이용한 API 키 관리 (최초 1회 입력 시 브라우저 유지)
+if "api_key" not in st.session_state:
+    st.session_state.api_key = ""
 
-# 보관함에 키가 없을 경우에만 입력창 표시 (안전장치)
-if not API_KEY:
-    user_input_key = st.text_input("Gemini API 키를 입력하세요", type="password", placeholder="AI Studio 키 입력")
+# API 키가 입력되지 않은 경우에만 입력창 표시
+if not st.session_state.api_key:
+    st.info("💡 최초 접속 시 1회만 Gemini API 키를 입력해 주세요. (이후에는 입력 없이 쭉 유지됩니다)")
+    user_input_key = st.text_input("Gemini API 키를 입력하세요", type="password", placeholder="AI Studio 키 입력 후 엔터")
     if user_input_key:
-        API_KEY = user_input_key.strip().encode('ascii', 'ignore').decode('ascii')
+        st.session_state.api_key = user_input_key.strip().encode('ascii', 'ignore').decode('ascii')
+        st.rerun() # 키 입력 즉시 새로고침하여 앱 활성화
+
+API_KEY = st.session_state.api_key
 
 # 3. 파일 업로드 및 텍스트 입력창
 uploaded_file = st.file_uploader("알리 상품 이미지를 업로드하세요", type=["jpg", "jpeg", "png"])
@@ -30,7 +30,7 @@ chinese_text = st.text_area("알리 상품 원본 텍스트(중국어/영어)", 
 # 4. 생성 버튼 및 맞춤형 디자인 빌드 로직
 if st.button("🚀 폰케이스 전문 상세페이지 HTML 생성하기"):
     if not API_KEY:
-        st.error("API 키가 설정되지 않았습니다. Streamlit Secrets를 설정하거나 키를 입력해주세요!")
+        st.error("API 키가 입력되지 않았습니다. 상단에 API 키를 입력해주세요!")
     elif not uploaded_file:
         st.error("알리 상품 이미지를 업로드해주세요!")
     else:
@@ -61,7 +61,7 @@ if st.button("🚀 폰케이스 전문 상세페이지 HTML 생성하기"):
                            - [상단 배너]: 제품명과 슬로건을 담은 프리미엄 후킹 영역 (예: CRYSTAL CLEAR PRO 등)
                            - [에어쿠션 및 모서리 보호]: 충격 흡수 구조를 시각적으로 강조하는 설명 박스
                            - [정밀 버튼감 및 포트 설계]: 디테일한 설계 포인트를 짚어주는 기능성 강조 섹션
-                           - [황변 방지 및 투명도]: 지속력 높은 소재와 변색 방지 장점을 보여주는 비교/강조 섹션
+                           - [황변 방지 및 투명도]: 지속력 높은 소재와 변색 변지 장점을 보여주는 비교/강조 섹션
                            - [스펙 요약 (INFORMATION)]: 쿠팡 스타일의 깔끔하고 정돈된 2단 스펙 테이블
                         4. 모바일 가로폭 기준(최대 860px 고정, 반응형)으로 인라인 CSS를 활용해 즉시 완벽하게 렌더링되도록 작성해주세요.
 
