@@ -1,5 +1,3 @@
+google-genai
+Pillow
 streamlit
-pandas
-openpyxl
-xlrd
-requests
