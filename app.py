@@ -10,7 +10,7 @@ st.title("🛒 쿠팡 스마트폰 케이스 상세페이지 자동 생성기")
 st.write("새로운 API 키가 적용되었습니다. 폰케이스 전문 스타일(BT Clear PRO 스타일)의 깔끔하고 가독성 높은 상세페이지를 빌드합니다.")
 
 # 2. 새로운 API 키 설정 (에러 방지 처리 완료)
-RAW_API_KEY = "AQ.Ab8RN6Jj5EVpfwmxmj4BOwLSiNLiApZOTE5_NSbb9RKgz7f0Vw"
+RAW_API_KEY = "AQ.Ab8RN6L0AOTj01my-I3SYw4sRouRBLmmlVpCoI8Yxli4IkOJdQ"
 API_KEY = RAW_API_KEY.strip().encode('ascii', 'ignore').decode('ascii')
 
 # 3. 파일 업로드 및 텍스트 입력창
