@@ -7,7 +7,7 @@ import time
 st.set_page_config(page_title="쿠팡 실전형 상세페이지 생성기", layout="centered")
 
 st.title("🛒 쿠팡 실전형 상세페이지 자동 생성기")
-st.write("서버 과부하(503) 및 토큰 초과 에러를 방지하기 위해 **이미지 자동 최적화(리사이징)** 기능이 적용되었습니다.")
+st.write("참고 사진의 스타일을 반영하여, 모바일에서 **글씨가 큼직하고 시원하게 읽히도록** 가독성을 극대화했습니다.")
 
 # 2. API 키 설정 (에러 방지 처리 완료)
 RAW_API_KEY = "AQ.Ab8RN6KnLuOC6DopKvRZ2LwQKWf2dhDqJepWBSMW8VniF27ziw"
@@ -18,7 +18,7 @@ uploaded_file = st.file_uploader("알리 상품 이미지를 업로드하세요"
 chinese_text = st.text_area("알리 상품 원본 텍스트(중국어/영어)", "45W超快充 10000mAh自带双线 充电宝 迷你便携")
 
 # 4. 생성 버튼 및 최적화 빌드 로직
-if st.button("🚀 실전 상세페이지 HTML 생성하기"):
+if st.button("🚀 큼직한 가독성형 상세페이지 HTML 생성하기"):
     if not API_KEY:
         st.error("API 키를 확인해주세요!")
     elif not uploaded_file:
@@ -29,29 +29,35 @@ if st.button("🚀 실전 상세페이지 HTML 생성하기"):
             
             # 이미지 열기 및 자동 리사이징 (서버 과부하 및 토큰 초과 방지)
             img = Image.open(uploaded_file)
-            img.thumbnail((1024, 1024)) # 해상도를 최적화 크기로 조절
+            img.thumbnail((1024, 1024))
 
             max_retries = 3
             response = None
             success = False
 
-            with st.spinner("이미지를 최적화하고 쿠팡 스타일 HTML 상세페이지를 빌드 중입니다..."):
+            with st.spinner("모바일 최적화 및 큼직한 폰트 스타일을 적용하여 HTML을 빌드 중입니다..."):
                 for attempt in range(max_retries):
                     try:
                         prompt = f"""
                         당신은 30년 경력의 이커머스 전문 기획자이자 수석 웹 퍼블리셔입니다.
                         첨부된 알리익스프레스 상품 이미지와 원본 텍스트를 분석하여, 한국 쿠팡 모바일 쇼핑객의 구매 전환율을 극대화할 **완성된 모바일 상세페이지 HTML/CSS 소스코드**를 작성해주세요.
 
+                        [매우 중요한 타이포그래피(폰트 크기) 및 디자인 규칙]
+                        - 모바일 화면에서 스마트폰 사용자가 한눈에 읽기 쉽도록 **글씨 크기를 충분히 큼직하고 시원하게** 설정해주세요! (첨부된 참고 사진처럼 가독성이 극대화된 스타일)
+                        - 주요 제목(Headings, h2/h3): 최소 20px ~ 24px 이상, 볼드체(bold) 적용
+                        - 본문 설명 텍스트(p/span): 최소 15px ~ 16px 이상으로 설정하고, 줄간격(line-height)은 1.6 이상으로 넉넉하게 주어 절대 작아 보이거나 답답해 보이지 않게 하세요.
+                        - 여백(Padding/Margin): 각 섹션마다 충분한 여백을 주어 깔끔하고 고급스러운 그리드 레이아웃을 구성하세요.
+
                         [요구사항]
                         1. 반드시 마크다운 코드 블록(```html ... ```) 형태로 전체 HTML 코드를 출력해주세요.
-                        2. 모바일 가로폭 기준(최대 860px 고정, 깔끔한 반응형)으로 작성하세요.
+                        2. 모바일 가로폭 기준(최대 860px 고정, 반응형)으로 작성하세요.
                         3. 필수 포함 섹션:
-                           - 최상단 시선을 사로잡는 강력한 후킹 배너
+                           - 최상단 시선을 사로잡는 강력한 후킹 배너 (큰 글씨)
                            - 고객의 페인 포인트 공감 및 속시원한 해결책 제시
-                           - 3대 핵심 셀링 포인트 (시각적 강조 디자인)
-                           - 쿠팡 스타일의 깔끔한 스펙 요약 표 (Table)
+                           - 3대 핵심 셀링 포인트 (큼직한 아이콘 및 강조 박스 디자인)
+                           - 쿠팡 스타일의 깔끔한 스펙 요약 표 (글씨가 큼직한 Table)
                            - 구매 유도 마감 임박 및 신뢰 강조 클로징 카피
-                        4. 텍스트는 세련된 한국어 마케팅 카피로 작성하고 인라인 CSS로 시각적으로 훌륭하게 스타일링하세요.
+                        4. 인라인 CSS를 활용해 시각적으로 즉시 훌륭하게 보이도록 스타일링해주세요.
 
                         [알리 원본 텍스트]
                         {chinese_text}
@@ -65,10 +71,9 @@ if st.button("🚀 실전 상세페이지 HTML 생성하기"):
                         break
 
                     except Exception as api_err:
-                        # 503 또는 429 에러 발생 시 대기 후 자동 재시도
                         if "503" in str(api_err) or "UNAVAILABLE" in str(api_err) or "429" in str(api_err):
                             if attempt < max_retries - 1:
-                                time.sleep(5) # 5초 대기 후 재시도
+                                time.sleep(5)
                                 continue
                             else:
                                 raise api_err
@@ -86,7 +91,7 @@ if st.button("🚀 실전 상세페이지 HTML 생성하기"):
                 else:
                     html_code = raw_text
 
-                st.success("✅ 실전 상세페이지 HTML 코드가 성공적으로 완성되었습니다!")
+                st.success("✅ 큼직하고 가독성 높은 상세페이지 HTML 코드가 완성되었습니다!")
 
                 # 1. 웹 미리보기
                 st.subheader("📱 모바일 상세페이지 미리보기")
@@ -96,7 +101,7 @@ if st.button("🚀 실전 상세페이지 HTML 생성하기"):
                 st.download_button(
                     label="💾 상세페이지 HTML 파일 다운로드",
                     data=html_code,
-                    file_name="coupang_detail_page.html",
+                    file_name="coupang_detail_page_large_font.html",
                     mime="text/html"
                 )
 
