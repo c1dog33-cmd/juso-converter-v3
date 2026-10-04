@@ -6,7 +6,7 @@ from PIL import Image
 st.title("🛒 알리 ➡️ 쿠팡 상세페이지 자동 생성기")
 st.write("알리익스프레스 상품 이미지와 원본 텍스트를 넣으면 쿠팡 맞춤형 상세페이지 기획안을 만들어 줍니다.")
 
-# 2. API 키 자동 설정 (입력창 제거 버전)
+# 2. API 키 설정
 API_KEY = "AQ.Ab8RN6Jj5EVpfwmxmj4BOwLSiNLiApZOTE5_NSbb9RKgz7f0Vw"
 
 # 3. 파일 업로드 및 텍스트 입력창 만들기
@@ -39,9 +39,9 @@ if st.button("상세페이지 기획안 생성하기"):
                 4. 쿠팡 요약 스펙 정리
                 """
 
-                # 최신 모델 호출
+                # 안정적인 모델로 변경
                 response = client.models.generate_content(
-                    model='gemini-3.8-flash',
+                    model='gemini-2.5-flash',
                     contents=[img, prompt]
                 )
 
