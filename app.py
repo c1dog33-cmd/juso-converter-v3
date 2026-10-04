@@ -7,7 +7,7 @@ import time
 st.set_page_config(page_title="쿠팡 실전형 상세페이지 생성기", layout="centered")
 
 st.title("🛒 쿠팡 실전형 상세페이지 자동 생성기")
-st.write("토큰 초과(429 에러)를 방지하기 위해 이미지를 가장 효율적인 방식으로 전송하도록 최적화되었습니다.")
+st.write("서버 과부하(503) 및 토큰 초과 에러를 방지하기 위해 **이미지 자동 최적화(리사이징)** 기능이 적용되었습니다.")
 
 # 2. API 키 설정 (에러 방지 처리 완료)
 RAW_API_KEY = "AQ.Ab8RN6KnLuOC6DopKvRZ2LwQKWf2dhDqJepWBSMW8VniF27ziw"
@@ -26,13 +26,16 @@ if st.button("🚀 실전 상세페이지 HTML 생성하기"):
     else:
         try:
             client = genai.Client(api_key=API_KEY)
+            
+            # 이미지 열기 및 자동 리사이징 (서버 과부하 및 토큰 초과 방지)
             img = Image.open(uploaded_file)
+            img.thumbnail((1024, 1024)) # 해상도를 최적화 크기로 조절
 
             max_retries = 3
             response = None
             success = False
 
-            with st.spinner("AI가 상품을 분석하고 쿠팡 스타일 HTML 상세페이지를 빌드 중입니다..."):
+            with st.spinner("이미지를 최적화하고 쿠팡 스타일 HTML 상세페이지를 빌드 중입니다..."):
                 for attempt in range(max_retries):
                     try:
                         prompt = f"""
@@ -54,7 +57,6 @@ if st.button("🚀 실전 상세페이지 HTML 생성하기"):
                         {chinese_text}
                         """
 
-                        # 이미지를 직접 리스트에 담아 전달하여 토큰 폭탄 방지
                         response = client.models.generate_content(
                             model='gemini-3.8-flash',
                             contents=[img, prompt]
@@ -63,7 +65,7 @@ if st.button("🚀 실전 상세페이지 HTML 생성하기"):
                         break
 
                     except Exception as api_err:
-                        # 503 또는 429 에러 발생 시 자동 재시도
+                        # 503 또는 429 에러 발생 시 대기 후 자동 재시도
                         if "503" in str(api_err) or "UNAVAILABLE" in str(api_err) or "429" in str(api_err):
                             if attempt < max_retries - 1:
                                 time.sleep(5) # 5초 대기 후 재시도
@@ -103,4 +105,4 @@ if st.button("🚀 실전 상세페이지 HTML 생성하기"):
                     st.code(html_code, language="html")
 
         except Exception as e:
-            st.error(f"오류가 발생했습니다: {e}\n\n※ 토큰 한도 또는 트래픽 과부하일 수 있으니 잠시(1분 정도) 기다렸다가 다시 버튼을 눌러주세요.")
+            st.error(f"오류가 발생했습니다: {e}\n\n※ 서버 트래픽이 심할 경우 잠시 후 다시 버튼을 눌러주세요.")
