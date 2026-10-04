@@ -7,11 +7,11 @@ import time
 st.set_page_config(page_title="쿠팡 스마트폰 케이스 상세페이지 생성기", layout="centered")
 
 st.title("🛒 쿠팡 스마트폰 케이스 상세페이지 자동 생성기")
-st.write("새로운 API 키가 적용되었습니다. 폰케이스 전문 스타일(BT Clear PRO 스타일)의 깔끔하고 가독성 높은 상세페이지를 빌드합니다.")
+st.write("안전한 오픈 웹 운영을 위해 **사용자 개별 API 키 입력 방식**이 적용되었습니다.")
 
-# 2. 새로운 API 키 설정 (에러 방지 처리 완료)
-RAW_API_KEY = "AQ.Ab8RN6L0AOTj01my-I3SYw4sRouRBLmmlVpCoI8Yxli4IkOJdQ"
-API_KEY = RAW_API_KEY.strip().encode('ascii', 'ignore').decode('ascii')
+# 2. 사용자 개별 API 키 입력 받기 (보안 강화)
+user_api_key = st.text_input("Gemini API 키를 입력하세요", type="password", placeholder="AI Studio에서 발급받은 키를 입력하세요")
+st.caption("💡 타인에게 키가 노출되지 않도록 입력 시 마스킹 처리됩니다. (본인 키를 넣고 사용하세요)")
 
 # 3. 파일 업로드 및 텍스트 입력창
 uploaded_file = st.file_uploader("알리 상품 이미지를 업로드하세요", type=["jpg", "jpeg", "png"])
@@ -19,15 +19,18 @@ chinese_text = st.text_area("알리 상품 원본 텍스트(중국어/영어)", 
 
 # 4. 생성 버튼 및 맞춤형 디자인 빌드 로직
 if st.button("🚀 폰케이스 전문 상세페이지 HTML 생성하기"):
-    if not API_KEY:
-        st.error("API 키를 확인해주세요!")
+    # 입력된 API 키 정제
+    clean_api_key = user_api_key.strip().encode('ascii', 'ignore').decode('ascii') if user_api_key else ""
+
+    if not clean_api_key:
+        st.error("상세페이지를 생성하려면 본인의 Gemini API 키를 입력해주세요!")
     elif not uploaded_file:
         st.error("알리 상품 이미지를 업로드해주세요!")
     else:
         try:
-            client = genai.Client(api_key=API_KEY)
+            client = genai.Client(api_key=clean_api_key)
             
-            # 이미지 열기 및 자동 리사이징 (서버 과부하 및 토큰 초과 방지)
+            # 이미지 열기 및 자동 리사이징
             img = Image.open(uploaded_file)
             img.thumbnail((1024, 1024))
 
@@ -106,4 +109,4 @@ if st.button("🚀 폰케이스 전문 상세페이지 HTML 생성하기"):
                     st.code(html_code, language="html")
 
         except Exception as e:
-            st.error(f"오류가 발생했습니다: {e}\n\n※ 서버 트래픽이 심할 경우 잠시 후 다시 버튼을 눌러주세요.")
+            st.error(f"오류가 발생했습니다: {e}\n\n※ API 키가 올바른지 확인하거나 잠시 후 다시 시도해 주세요.")
