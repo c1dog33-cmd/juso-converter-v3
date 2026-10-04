@@ -6,8 +6,9 @@ from PIL import Image
 st.title("🛒 알리 ➡️ 쿠팡 상세페이지 자동 생성기")
 st.write("알리익스프레스 상품 이미지와 원본 텍스트를 넣으면 쿠팡 맞춤형 상세페이지 기획안을 만들어 줍니다.")
 
-# 2. API 키 설정
-API_KEY = "AQ.Ab8RN6Jj5EVpfwmxmj4BOwLSiNLiApZOTE5_NSbb9RKgz7f0Vw"
+# 2. API 키 설정 (수동 입력 없이 바로 사용하도록 설정된 코드)
+# 본인의 API 키를 이곳에 복사해서 넣으세요.
+API_KEY = "본인의_Gemini_API_Key_여기에_입력"
 
 # 3. 파일 업로드 및 텍스트 입력창 만들기
 uploaded_file = st.file_uploader("알리 상품 이미지를 업로드하세요", type=["jpg", "jpeg", "png"])
@@ -15,7 +16,9 @@ chinese_text = st.text_area("알리 상품 원본 텍스트(중국어 또는 영
 
 # 4. 버튼을 누르면 실행되는 로직
 if st.button("상세페이지 기획안 생성하기"):
-    if not uploaded_file:
+    if not API_KEY or API_KEY == "본인의_AQ.Ab8RN6KnLuOC6DopKvRZ2LwQKWf2dhDqJepWBSMW8VniF27ziw_여기에_입력":
+        st.error("코드 내에 API 키를 먼저 입력해주세요!")
+    elif not uploaded_file:
         st.error("알리 상품 이미지를 업로드해주세요!")
     else:
         try:
@@ -39,9 +42,9 @@ if st.button("상세페이지 기획안 생성하기"):
                 4. 쿠팡 요약 스펙 정리
                 """
 
-                # 안정적인 모델로 변경
+                # 모델명을 최신 버전으로 수정
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-3.8-flash',
                     contents=[img, prompt]
                 )
 
