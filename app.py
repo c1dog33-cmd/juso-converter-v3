@@ -19,7 +19,7 @@ def fix_zipcode(val):
 SPECIAL_EXCEPTIONS = {
     "불로동 268-2": "인천광역시 검단구 금정로 12 (불로동, 신검단중앙역풍경채어바니티)",
     "남산타운": "서울특별시 중구 다산로 32 (신당동, 남산타운)",
-    "율곡동 415": "경상북도 김천시 혁신8로 66",
+    "율곡동 415": "경상북도 김천시 혁신8로 66 (율곡동, 김천혁신도시 영무예다음1차아파트)",
 }
 
 def remove_illegal_chars(val):
@@ -167,7 +167,7 @@ def clean_product_name(val):
         
     return result_str
 
-# --- [ 행정안전부 주소정보누리집 API 연동 주소 변환 엔진 ] ---
+# --- [ 행정안전부 주소정보누리집 API 연동 및 아파트명 우선 매칭 엔진 ] ---
 def juso_gov_converter(keyword, original_zip=""):
     if not keyword or pd.isna(keyword):
         return keyword
@@ -179,20 +179,24 @@ def juso_gov_converter(keyword, original_zip=""):
         if target_key in kw_str:
             return override_addr
             
-    # 1. 괄호 원본 분리
+    # 1. 원본 주소에서 아파트명(건물명) 키워드 추출 시도
+    apt_match = re.search(r'([가-힣\d\s]+(?:아파트|오피스텔|빌리지|타운|스타힐스|아이파크|휴먼빌|자이|더샵|푸르지오|래미안|메가트리아|아이유쉘|호반베르디움|굿모닝힐|하나로아파트|더휴|월드아파트|황실타운|유니드))', kw_str)
+    apt_keyword = apt_match.group(1).strip() if apt_match else ""
+
+    # 2. 괄호 원본 분리
     parens = re.findall(r'\([^)]+\)', kw_str)
     for p in parens:
         kw_str = kw_str.replace(p, "").strip()
     paren_str = parens[-1] if parens else ""
 
-    # 2. 상세 동·호수 및 배송 메모 추출
+    # 3. 상세 동·호수 및 배송 메모 추출
     tail_detail = ""
     m_detail = re.search(r'(\d+동\s*\d+호.*|[A-Z가-힣]\s*동\s*\d+호.*|\d+\s*호.*)', kw_str)
     if m_detail:
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 3. 구주소 패턴 검사 및 번지수 기준 API 쿼리 추출
+    # 4. 지번 패턴 검사 및 API 쿼리 파트 추출 (번지수까지만 깔끔하게 잘라서 검색)
     has_jibun_pattern = bool(re.search(r'([가-힣]+(시|도))\s+([가-힣]+(시|군|구)?(\s+[가-힣]+구)?)\s+([가-힣]+(동|읍|면|리))\s+\d+', kw_str))
     
     base_road_addr = ""
@@ -210,12 +214,11 @@ def juso_gov_converter(keyword, original_zip=""):
 
         base_road_addr = api_query_part
         
-        # 행정안전부 주소정보누리집 오픈 API 호출
         url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
         params = {
             "confmKey": JUSO_CONFIRM_KEY,
             "currentPage": 1,
-            "countPerPage": 5,
+            "countPerPage": 10,
             "keyword": api_query_part,
             "resultType": "json"
         }
@@ -225,10 +228,22 @@ def juso_gov_converter(keyword, original_zip=""):
                 res = response.json()
                 juso_list = res.get('results', {}).get('juso', [])
                 if juso_list:
-                    # 도로명 주소(roadAddr) 사용
-                    road_addr = juso_list[0].get('roadAddr', '')
-                    if road_addr:
-                        base_road_addr = road_addr
+                    selected_road = ""
+                    # 아파트명이 원본에 있는 경우, API 결과 목록 중 아파트명이 포함된 항목 우선 선택
+                    if apt_keyword:
+                        keywords = [w for w in apt_keyword.split() if len(w) > 1]
+                        for item in juso_list:
+                            road = item.get('roadAddr', '')
+                            if any(kw in road for kw in keywords) or '아파트' in road:
+                                selected_road = road
+                                break
+                    
+                    # 아파트명을 못 찾았거나 일반 주소인 경우 첫 번째 결과 사용
+                    if not selected_road:
+                        selected_road = juso_list[0].get('roadAddr', '')
+                        
+                    if selected_road:
+                        base_road_addr = selected_road
         except Exception:
             pass
             
@@ -237,13 +252,9 @@ def juso_gov_converter(keyword, original_zip=""):
     else:
         base_road_addr = kw_str
 
-    # 4. 최종 조립 순서: [기본 주소] -> [괄호(원본)] -> [상세 동·호수 및 메모]
+    # 5. 최종 조립: [도로명 주소] -> [상세 동·호수] 순으로 깔끔하게 결합
     parts = [base_road_addr]
-    if tail_part and tail_part not in base_road_addr:
-        parts.append(tail_part)
-    if paren_str:
-        parts.append(paren_str)
-    if tail_detail:
+    if tail_detail and tail_detail not in base_road_addr:
         parts.append(tail_detail)
 
     final_str = ' '.join(parts)
