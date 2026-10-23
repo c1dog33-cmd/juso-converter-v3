@@ -7,8 +7,8 @@ import requests
 import streamlit as st
 from openpyxl.styles import Font
 
-# 🚀 행정안전부 도로명주소 오픈 API 승인키 적용 완료
-JUSO_CONFIRM_KEY = "U01TX0FVVEgyMDI2MTAyMzE3MDUxMjEyMDgzMzI="  
+# 🚀 행정안전부 도로명주소(주소정보누리집) 오픈 API 승인키 반영 완료
+JUSO_CONFIRM_KEY = "U01TX0FVVEgyMDI2MTAyMzE3MDUxMjEyMDgzMzI="
 
 def fix_zipcode(val):
     if pd.isna(val) or val is None:
@@ -16,35 +16,65 @@ def fix_zipcode(val):
     val_str = str(val).split('.')[0].strip()
     return val_str.zfill(5) if val_str else ""
 
+SPECIAL_EXCEPTIONS = {
+    "불로동 268-2": "인천광역시 검단구 금정로 12 (불로동, 신검단중앙역풍경채어바니티)",
+    "남산타운": "서울특별시 중구 다산로 32 (신당동, 남산타운)",
+    "율곡동 415": "경상북도 김천시 혁신8로 66",
+}
+
 def remove_illegal_chars(val):
     if isinstance(val, str):
         return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', val)
     return val
 
-def remove_duplicate_parentheses(addr_str):
+def remove_stray_province(addr_str):
     if not addr_str:
         return addr_str
-    parts = re.split(r'(\([^)]+\))', addr_str)
-    seen = set()
-    new_parts = []
-    for part in parts:
-        if part.startswith('(') and part.endswith(')'):
-            normalized = re.sub(r'\s+', '', part)
-            if normalized in seen:
+    tokens = str(addr_str).split()
+    new_tokens = []
+    seen_prov = False
+    provinces = ['강원특별자치도', '강원도', '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시', '대전광역시', '울산광역시', '세종특별자치시', '경기도', '충청북도', '충청남도', '전라북도', '전라남도', '경상북도', '경상남도', '제주특별자치도']
+    for tok in tokens:
+        if tok in provinces:
+            if not seen_prov:
+                seen_prov = True
+                new_tokens.append(tok)
+            else:
                 continue
-            seen.add(normalized)
-            new_parts.append(part)
         else:
-            new_parts.append(part)
-    return ''.join(new_parts)
+            new_tokens.append(tok)
+    return ' '.join(new_tokens)
 
-def format_dong_ho(addr_str):
+def preprocess_attached_dong(addr_str):
     if not addr_str:
         return addr_str
-    # '107동109호' 처럼 동과 호수 사이에 공백이 없는 경우 자동 띄어쓰기 삽입
-    s = re.sub(r'(\d+동)(\d+호)', r'\1 \2', str(addr_str))
-    s = re.sub(r'([A-Z가-힣]\s*동)(\d+호)', r'\1 \2', s)
+    s = str(addr_str).strip()
+    s = re.sub(r'([가-힣]+팰리스)([A-Z가-힣\d]동)', r'\1 \2', s)
+    s = re.sub(r'([가-힣]+하이츠)([A-Z가-힣\d]동)', r'\1 \2', s)
+    s = re.sub(r'([가-힣]+아파트)([A-Z가-힣\d]동)', r'\1 \2', s)
     return s
+
+def remove_duplicate_words(addr_str):
+    if not addr_str:
+        return addr_str
+    s = str(addr_str).strip()
+    words = s.split()
+    cleaned_words = []
+    i = 0
+    while i < len(words):
+        cleaned_words.append(words[i])
+        matched_dup = False
+        for length in range(4, 0, -1):
+            if i + length * 2 <= len(words):
+                seq1 = words[i:i+length]
+                seq2 = words[i+length:i+length*2]
+                if seq1 == seq2:
+                    i += length
+                    matched_dup = True
+                    break
+        if not matched_dup:
+            i += 1
+    return ' '.join(cleaned_words)
 
 def clean_product_name(val):
     if pd.isna(val) or not str(val).strip():
@@ -138,69 +168,97 @@ def clean_product_name(val):
     return result_str
 
 # --- [ 행정안전부 주소정보누리집 API 연동 주소 변환 엔진 ] ---
-def juso_gov_converter(keyword):
+def juso_gov_converter(keyword, original_zip=""):
     if not keyword or pd.isna(keyword):
         return keyword
         
     kw_str = str(keyword).strip()
+    kw_str = preprocess_attached_dong(kw_str)
     
-    # 1. 괄호 원본 분리 (메모 및 건물명 등)
+    for target_key, override_addr in SPECIAL_EXCEPTIONS.items():
+        if target_key in kw_str:
+            return override_addr
+            
+    # 1. 괄호 원본 분리
     parens = re.findall(r'\([^)]+\)', kw_str)
     for p in parens:
         kw_str = kw_str.replace(p, "").strip()
     paren_str = parens[-1] if parens else ""
 
-    # 2. 상세 동·호수 및 층수 분리 (예: 101동 202호, 3층 등)
+    # 2. 상세 동·호수 및 배송 메모 추출
     tail_detail = ""
-    m_detail = re.search(r'(\d+동\s*\d+호.*|[A-Z가-힣]\s*동\s*\d+호.*|\d+\s*호.*|\d+층.*)', kw_str)
+    m_detail = re.search(r'(\d+동\s*\d+호.*|[A-Z가-힣]\s*동\s*\d+호.*|\d+\s*호.*)', kw_str)
     if m_detail:
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 3. 행정안전부 주소 API 호출하여 도로명주소로 변환
-    url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
-    params = {
-        "confmKey": JUSO_CONFIRM_KEY,
-        "currentPage": 1,
-        "countPerPage": 1,
-        "keyword": kw_str,
-        "resultType": "json"
-    }
+    # 3. 구주소 패턴 검사 및 번지수 기준 API 쿼리 추출
+    has_jibun_pattern = bool(re.search(r'([가-힣]+(시|도))\s+([가-힣]+(시|군|구)?(\s+[가-힣]+구)?)\s+([가-힣]+(동|읍|면|리))\s+\d+', kw_str))
     
-    base_road_addr = kw_str
-    try:
-        response = requests.get(url, params=params, timeout=5)
-        if response.status_code == 200:
-            res = response.json()
-            common = res.get('results', {}).get('common', {})
-            if common.get('errorCode') == '0':
+    base_road_addr = ""
+    tail_part = ""
+    
+    if has_jibun_pattern:
+        m_jibun = re.search(r'([가-힣]+동\s*\d+(?:-\d+)?)', kw_str)
+        if m_jibun:
+            end_pos = m_jibun.end()
+            api_query_part = kw_str[:end_pos].strip()
+            tail_part = kw_str[end_pos:].strip()
+        else:
+            api_query_part = kw_str
+            tail_part = ""
+
+        base_road_addr = api_query_part
+        
+        # 행정안전부 주소정보누리집 오픈 API 호출
+        url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
+        params = {
+            "confmKey": JUSO_CONFIRM_KEY,
+            "currentPage": 1,
+            "countPerPage": 5,
+            "keyword": api_query_part,
+            "resultType": "json"
+        }
+        try:
+            response = requests.get(url, params=params, timeout=5)
+            if response.status_code == 200:
+                res = response.json()
                 juso_list = res.get('results', {}).get('juso', [])
                 if juso_list:
+                    # 도로명 주소(roadAddr) 사용
                     road_addr = juso_list[0].get('roadAddr', '')
                     if road_addr:
                         base_road_addr = road_addr
-    except Exception:
-        pass
+        except Exception:
+            pass
+            
+        if not base_road_addr:
+            base_road_addr = api_query_part
+    else:
+        base_road_addr = kw_str
 
-    # 4. 최종 주소 조립 순서 변경: [도로명주소] + [상세 층수/동호수] + [괄호(배송메모)]
+    # 4. 최종 조립 순서: [기본 주소] -> [괄호(원본)] -> [상세 동·호수 및 메모]
     parts = [base_road_addr]
+    if tail_part and tail_part not in base_road_addr:
+        parts.append(tail_part)
+    if paren_str:
+        parts.append(paren_str)
     if tail_detail:
         parts.append(tail_detail)
-    if paren_str and paren_str not in base_road_addr:
-        parts.append(paren_str)
 
     final_str = ' '.join(parts)
-    final_str = remove_duplicate_parentheses(final_str)
-    final_str = format_dong_ho(final_str)
+    final_str = remove_duplicate_words(final_str)
+    final_str = remove_stray_province(final_str)
+    final_str = re.sub(r'\(\s*\)', '', final_str)
     return ' '.join(final_str.split())
 
 # --- [ Streamlit 웹 UI 실행 부문 ] ---
-st.set_page_config(page_title="주소 및 상품명 변환기", page_icon="🏛️", layout="centered")
+st.set_page_config(page_title="주소정보누리집 API 주소 변환기", page_icon="🏛️", layout="centered")
 
-st.title("🏛️ 주소 및 상품명 엑셀 자동 정제기")
-st.write("엑셀 파일을 업로드하시면 도로명주소 변환, 상세주소 우선 정렬 및 상품명 정리가 함께 수행됩니다.")
+st.title("🏛️ 스마트샵 주소 변환 & 엑셀 정제 (주소정보누리집 API)")
+st.write("행정안전부 도로명주소 API를 연동한 최종 버전입니다.")
 
-uploaded_file = st.file_uploader("변환할 엑셀 파일(.xlsx, .xls)을 업로드하세요", type=["xlsx", "xls"])
+uploaded_file = st.file_uploader("변환할 엑셀 파일(.xlsx, .xls, .xlsb)을 업로드하세요", type=["xlsx", "xls", "xlsb"])
 
 if uploaded_file is not None:
     try:
@@ -214,16 +272,13 @@ if uploaded_file is not None:
     if 'excel_data' not in st.session_state:
         st.session_state.excel_data = None
 
-    if st.button("🚀 변환 및 정제 시작"):
-        with st.spinner("데이터를 처리하는 중입니다. 잠시만 기다려주세요..."):
+    if st.button("🚀 주소 변환 및 서식 적용 시작"):
+        with st.spinner("행정안전부 API로 주소를 변환하는 중입니다..."):
             if '우편번호' in df.columns:
                 df['우편번호'] = df['우편번호'].apply(fix_zipcode)
 
             if '선택정보' in df.columns:
                 df['선택정보'] = df['선택정보'].apply(clean_product_name)
-            elif len(df.columns) >= 5:
-                col_name_e = df.columns[4]
-                df[col_name_e] = df[col_name_e].apply(clean_product_name)
 
             if '배송지' in df.columns:
                 progress_bar = st.progress(0)
@@ -231,13 +286,14 @@ if uploaded_file is not None:
                 
                 converted_addrs = []
                 for i, row in df.iterrows():
-                    res = juso_gov_converter(row['배송지'])
+                    orig_zip = str(row['우편번호']).zfill(5) if '우편번호' in df.columns and not pd.isna(row['우편번호']) else ""
+                    res = juso_gov_converter(row['배송지'], original_zip=orig_zip)
                     converted_addrs.append(res)
                     progress_bar.progress((i + 1) / total)
                     
                 df['배송지'] = converted_addrs
             else:
-                st.warning("[주의] 엑셀 파일에서 '배송지' 컬럼을 찾을 수 없습니다.")
+                st.warning("[주의] '배송지' 컬럼을 찾을 수 없습니다.")
 
             for col in df.columns:
                 df[col] = df[col].apply(remove_illegal_chars)
@@ -255,7 +311,8 @@ if uploaded_file is not None:
                         length = sum(2 if ord(char) > 127 else 1 for char in val)
                         if length > max_len:
                             max_len = length
-                    worksheet.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 80)
+                    adjusted_width = max(max_len + 4, 12)
+                    worksheet.column_dimensions[col_letter].width = min(adjusted_width, 80)
 
                 font_size_8 = Font(size=8)
                 for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, min_col=1, max_col=len(df.columns)):
@@ -269,12 +326,12 @@ if uploaded_file is not None:
                         worksheet.cell(row=row, column=zip_col_idx).number_format = '@'
 
             st.session_state.excel_data = output.getvalue()
-        st.success("🎉 변환 및 정리가 완료되었습니다!")
+        st.success("🎉 행정안전부 API 주소 변환 및 정리가 완료되었습니다!")
 
     if st.session_state.excel_data is not None:
         st.download_button(
             label="📥 변환된 엑셀 파일 다운로드",
             data=st.session_state.excel_data,
-            file_name="주소_상품명_변환완료.xlsx",
+            file_name="우편배송_행정안전부API_최종정리.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
