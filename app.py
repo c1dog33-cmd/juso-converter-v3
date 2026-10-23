@@ -19,7 +19,7 @@ def fix_zipcode(val):
 SPECIAL_EXCEPTIONS = {
     "불로동 268-2": "인천광역시 검단구 금정로 12 (불로동, 신검단중앙역풍경채어바니티)",
     "남산타운": "서울특별시 중구 다산로 32 (신당동, 남산타운)",
-    "율곡동 415": "경상북도 김천시 혁신8로 66",
+    "율곡동 415": "경상북도 김천시 혁신8로 66 (율곡동, 김천혁신도시 영무예다음1차아파트)",
 }
 
 def remove_illegal_chars(val):
@@ -167,7 +167,7 @@ def clean_product_name(val):
         
     return result_str
 
-# --- [ 행정안전부 주소정보누리집 API 연동 주소 변환 엔진 ] ---
+# --- [ 행정안전부 주소정보누리집 API 연동 및 아파트명 보존 주소 변환 엔진 ] ---
 def juso_gov_converter(keyword, original_zip=""):
     if not keyword or pd.isna(keyword):
         return keyword
@@ -179,24 +179,26 @@ def juso_gov_converter(keyword, original_zip=""):
         if target_key in kw_str:
             return override_addr
             
-    # 1. 괄호 원본 분리
+    # 1. 원본 주소에서 아파트명(건물명) 및 동·호수 미리 백업
+    apt_match = re.search(r'([가-힣\d\s]+(?:아파트|오피스텔|빌리지|타운|스타힐스|아이파크|휴먼빌|자이|더샵|푸르지오|래미안|메가트리아|아이유쉘|호반베르디움|굿모닝힐|하나로아파트|더휴|월드아파트|황실타운|유니드))', kw_str)
+    extracted_apt = apt_match.group(1).strip() if apt_match else ""
+
     parens = re.findall(r'\([^)]+\)', kw_str)
     for p in parens:
         kw_str = kw_str.replace(p, "").strip()
     paren_str = parens[-1] if parens else ""
 
-    # 2. 상세 동·호수 및 배송 메모 추출
     tail_detail = ""
     m_detail = re.search(r'(\d+동\s*\d+호.*|[A-Z가-힣]\s*동\s*\d+호.*|\d+\s*호.*)', kw_str)
     if m_detail:
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 3. 구주소 패턴 검사 및 번지수 기준 API 쿼리 추출
     has_jibun_pattern = bool(re.search(r'([가-힣]+(시|도))\s+([가-힣]+(시|군|구)?(\s+[가-힣]+구)?)\s+([가-힣]+(동|읍|면|리))\s+\d+', kw_str))
     
     base_road_addr = ""
     tail_part = ""
+    api_building_name = ""
     
     if has_jibun_pattern:
         m_jibun = re.search(r'([가-힣]+동\s*\d+(?:-\d+)?)', kw_str)
@@ -210,12 +212,11 @@ def juso_gov_converter(keyword, original_zip=""):
 
         base_road_addr = api_query_part
         
-        # 행정안전부 주소정보누리집 오픈 API 호출
         url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
         params = {
             "confmKey": JUSO_CONFIRM_KEY,
             "currentPage": 1,
-            "countPerPage": 5,
+            "countPerPage": 10,
             "keyword": api_query_part,
             "resultType": "json"
         }
@@ -225,8 +226,22 @@ def juso_gov_converter(keyword, original_zip=""):
                 res = response.json()
                 juso_list = res.get('results', {}).get('juso', [])
                 if juso_list:
-                    # 도로명 주소(roadAddr) 사용
-                    road_addr = juso_list[0].get('roadAddr', '')
+                    selected_item = None
+                    if extracted_apt:
+                        keywords = [w for w in extracted_apt.split() if len(w) > 1]
+                        for item in juso_list:
+                            road = item.get('roadAddr', '')
+                            bld = item.get('bdNm', '')
+                            if any(kw in road or kw in bld for kw in keywords) or '아파트' in road:
+                                selected_item = item
+                                break
+                    
+                    if not selected_item:
+                        selected_item = juso_list[0]
+                        
+                    road_addr = selected_item.get('roadAddr', '')
+                    api_building_name = selected_item.get('bdNm', '')
+                    
                     if road_addr:
                         base_road_addr = road_addr
         except Exception:
@@ -237,13 +252,15 @@ def juso_gov_converter(keyword, original_zip=""):
     else:
         base_road_addr = kw_str
 
-    # 4. 최종 조립 순서: [기본 주소] -> [괄호(원본)] -> [상세 동·호수 및 메모]
+    # 2. 도로명 주소와 아파트명, 상세 동·호수를 깔끔하게 조합
     parts = [base_road_addr]
-    if tail_part and tail_part not in base_road_addr:
-        parts.append(tail_part)
-    if paren_str:
-        parts.append(paren_str)
-    if tail_detail:
+    
+    if extracted_apt and extracted_apt not in base_road_addr:
+        parts.append(f"({extracted_apt})")
+    elif api_building_name and api_building_name not in base_road_addr and api_building_name not in parts[-1]:
+        parts.append(f"({api_building_name})")
+
+    if tail_detail and tail_detail not in base_road_addr:
         parts.append(tail_detail)
 
     final_str = ' '.join(parts)
