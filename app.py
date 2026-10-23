@@ -43,7 +43,6 @@ def format_dong_ho(addr_str):
         return addr_str
     # '107동109호' 처럼 동과 호수 사이에 공백이 없는 경우 자동 띄어쓰기 삽입
     s = re.sub(r'(\d+동)(\d+호)', r'\1 \2', str(addr_str))
-    # '107동109' 처럼 호 글자가 생략된 경우 등 예외 처리 보완
     s = re.sub(r'([A-Z가-힣]\s*동)(\d+호)', r'\1 \2', s)
     return s
 
@@ -145,13 +144,13 @@ def juso_gov_converter(keyword):
         
     kw_str = str(keyword).strip()
     
-    # 1. 괄호 원본 분리 (예: 아파트 이름 등)
+    # 1. 괄호 원본 분리 (메모 및 건물명 등)
     parens = re.findall(r'\([^)]+\)', kw_str)
     for p in parens:
         kw_str = kw_str.replace(p, "").strip()
     paren_str = parens[-1] if parens else ""
 
-    # 2. 상세 동·호수 분리 (예: 101동 202호 등)
+    # 2. 상세 동·호수 및 층수 분리 (예: 101동 202호, 3층 등)
     tail_detail = ""
     m_detail = re.search(r'(\d+동\s*\d+호.*|[A-Z가-힣]\s*동\s*\d+호.*|\d+\s*호.*|\d+층.*)', kw_str)
     if m_detail:
@@ -183,12 +182,12 @@ def juso_gov_converter(keyword):
     except Exception:
         pass
 
-    # 4. 최종 주소 조립: [도로명주소] + [기존 괄호] + [상세 동호수/층수]
+    # 4. 최종 주소 조립 순서 변경: [도로명주소] + [상세 층수/동호수] + [괄호(배송메모)]
     parts = [base_road_addr]
-    if paren_str and paren_str not in base_road_addr:
-        parts.append(paren_str)
     if tail_detail:
         parts.append(tail_detail)
+    if paren_str and paren_str not in base_road_addr:
+        parts.append(paren_str)
 
     final_str = ' '.join(parts)
     final_str = remove_duplicate_parentheses(final_str)
@@ -199,7 +198,7 @@ def juso_gov_converter(keyword):
 st.set_page_config(page_title="주소 및 상품명 변환기", page_icon="🏛️", layout="centered")
 
 st.title("🏛️ 주소 및 상품명 엑셀 자동 정제기")
-st.write("엑셀 파일을 업로드하시면 도로명주소 변환, 중복 제거, 동·호수 띄어쓰기 및 상품명 정리가 함께 수행됩니다.")
+st.write("엑셀 파일을 업로드하시면 도로명주소 변환, 상세주소 우선 정렬 및 상품명 정리가 함께 수행됩니다.")
 
 uploaded_file = st.file_uploader("변환할 엑셀 파일(.xlsx, .xls)을 업로드하세요", type=["xlsx", "xls"])
 
