@@ -21,6 +21,23 @@ def remove_illegal_chars(val):
         return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', val)
     return val
 
+def remove_duplicate_parentheses(addr_str):
+    if not addr_str:
+        return addr_str
+    parts = re.split(r'(\([^)]+\))', addr_str)
+    seen = set()
+    new_parts = []
+    for part in parts:
+        if part.startswith('(') and part.endswith(')'):
+            normalized = re.sub(r'\s+', '', part)
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            new_parts.append(part)
+        else:
+            new_parts.append(part)
+    return ''.join(new_parts)
+
 def clean_product_name(val):
     if pd.isna(val) or not str(val).strip():
         return val
@@ -165,6 +182,7 @@ def juso_gov_converter(keyword):
         parts.append(tail_detail)
 
     final_str = ' '.join(parts)
+    final_str = remove_duplicate_parentheses(final_str)
     return ' '.join(final_str.split())
 
 # --- [ Streamlit 웹 UI 실행 부문 ] ---
@@ -195,7 +213,6 @@ if uploaded_file is not None:
             if '선택정보' in df.columns:
                 df['선택정보'] = df['선택정보'].apply(clean_product_name)
             elif len(df.columns) >= 5:
-                # E열(인덱스 4)이 상품명 컬럼일 경우 대체 적용
                 col_name_e = df.columns[4]
                 df[col_name_e] = df[col_name_e].apply(clean_product_name)
 
@@ -231,7 +248,7 @@ if uploaded_file is not None:
                             max_len = length
                     worksheet.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 80)
 
-                font_size_8 = Font(size=9)
+                font_size_8 = Font(size=8)
                 for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, min_col=1, max_col=len(df.columns)):
                     worksheet.row_dimensions[row[0].row].height = 18
                     for cell in row:
