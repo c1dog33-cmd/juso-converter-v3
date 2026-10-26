@@ -41,7 +41,6 @@ def remove_duplicate_parentheses(addr_str):
 def format_dong_ho(addr_str):
     if not addr_str:
         return addr_str
-    # '107동109호' 처럼 동과 호수 사이에 공백이 없는 경우 자동 띄어쓰기 삽입
     s = re.sub(r'(\d+동)(\d+호)', r'\1 \2', str(addr_str))
     s = re.sub(r'([A-Z가-힣]\s*동)(\d+호)', r'\1 \2', s)
     return s
@@ -144,13 +143,19 @@ def juso_gov_converter(keyword):
         
     kw_str = str(keyword).strip()
     
-    # 1. 괄호 원본 분리 (메모 및 건물명 등)
+    # 1. 괄호 원본 분리
     parens = re.findall(r'\([^)]+\)', kw_str)
     for p in parens:
         kw_str = kw_str.replace(p, "").strip()
     paren_str = parens[-1] if parens else ""
 
-    # 2. 상세 동·호수 및 층수 분리 (예: 101동 202호, 3층 등)
+    # 2. 건물명(오피스텔, 빌딩, 타워 등) 및 상세 동·호수·층수 추출 분리 보완
+    extracted_building = ""
+    building_match = re.search(r'([가-힣0-9]+\s*(?:오피스텔|타워|빌딩|플라자|스퀘어|상가|아파트|주상복합))', kw_str)
+    if building_match:
+        extracted_building = building_match.group(1).strip()
+        kw_str = kw_str.replace(extracted_building, "").strip()
+
     tail_detail = ""
     m_detail = re.search(r'(\d+동\s*\d+호.*|[A-Z가-힣]\s*동\s*\d+호.*|\d+\s*호.*|\d+층.*)', kw_str)
     if m_detail:
@@ -182,10 +187,18 @@ def juso_gov_converter(keyword):
     except Exception:
         pass
 
-    # 4. 최종 주소 조립 순서 변경: [도로명주소] + [상세 층수/동호수] + [괄호(배송메모)]
+    # 4. 최종 주소 조립 순서: [도로명주소] + [건물명] + [상세 층수/동호수] + [상호명/회사명 등 남은 텍스트] + [괄호(배송메모)]
     parts = [base_road_addr]
+    if extracted_building and extracted_building not in base_road_addr:
+        parts.append(extracted_building)
     if tail_detail:
         parts.append(tail_detail)
+    
+    # 남은 텍스트(예: 회사명 '에이블릭 코리아 주식회사') 처리
+    remaining = kw_str.replace(base_road_addr, "").strip()
+    if remaining and remaining not in ' '.join(parts):
+        parts.append(remaining)
+
     if paren_str and paren_str not in base_road_addr:
         parts.append(paren_str)
 
@@ -198,7 +211,7 @@ def juso_gov_converter(keyword):
 st.set_page_config(page_title="주소 및 상품명 변환기", page_icon="🏛️", layout="centered")
 
 st.title("🏛️ 주소 및 상품명 엑셀 자동 정제기")
-st.write("엑셀 파일을 업로드하시면 도로명주소 변환, 상세주소 우선 정렬 및 상품명 정리가 함께 수행됩니다.")
+st.write("엑셀 파일을 업로드하시면 도로명주소 변환, 건물명 및 상세주소 보존, 상품명 정리가 함께 수행됩니다.")
 
 uploaded_file = st.file_uploader("변환할 엑셀 파일(.xlsx, .xls)을 업로드하세요", type=["xlsx", "xls"])
 
