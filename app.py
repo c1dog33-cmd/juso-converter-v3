@@ -190,15 +190,15 @@ def juso_gov_converter(keyword):
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 건물명 추출 및 기억 (원룸, 빌라, 주택, 아파트 등 접미사 확장)
+    # 건물명 추출 및 기억 (강변타운, 타운, 원룸, 빌라, 주택, 아파트 등 접미사 확장)
     building_name = ""
-    m_bldg = re.search(r'\d+(?:-\d+)?\s+([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|원룸|빌라|주택|\d+차))\b', kw_str)
+    m_bldg = re.search(r'\d+(?:-\d+)?\s+([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|원룸|빌라|주택|강변타운|타운|\d+차))\b', kw_str)
     if not m_bldg:
-        m_bldg = re.search(r'([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|원룸|빌라|주택|\d+차))\s*$', kw_str)
+        m_bldg = re.search(r'([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|원룸|빌라|주택|강변타운|타운|\d+차))\s*$', kw_str)
 
     if m_bldg:
         potential_bldg = m_bldg.group(1).strip()
-        if len(potential_bldg) >= 2 and not re.search(r'(특별시|광역시|도|시|군|구|동|읍|면|도곡리|태화동|삼덕동\d*)$', potential_bldg):
+        if len(potential_bldg) >= 2 and not re.search(r'(특별시|광역시|도|시|군|구|동|읍|면|도곡리|태화동|화명동|삼덕동\d*)$', potential_bldg):
             building_name = potential_bldg
             kw_str = kw_str.replace(building_name, "").strip()
 
@@ -251,13 +251,22 @@ st.set_page_config(page_title="주소 및 상품명 변환기", page_icon="🏛�
 st.title("🏛️ 주소 및 상품명 엑셀 자동 정제기")
 st.write("엑셀 파일을 업로드하시면 도로명주소 변환, 상세주소 우선 정렬 및 상품명 정리가 함께 수행됩니다.")
 
-uploaded_file = st.file_uploader("변환할 엑셀 파일(.xlsx, .xls)을 업로드하세요", type=["xlsx", "xls"])
+uploaded_file = st.file_uploader("변환할 엑셀 파일(.xlsx, .xls)을 업로드하세요", type=["xlsx,xls".split(',')])
 
 if uploaded_file is not None:
     try:
-        df = pd.read_excel(uploaded_file)
+        # 원본 열 너비를 백업하기 위해 openpyxl로 원본 워크북 로드
+        uploaded_file.seek(0)
+        orig_wb = openpyxl.load_workbook(uploaded_file)
+        orig_ws = orig_wb.active
+        orig_col_widths = {col: orig_ws.column_dimensions[col].width for col in orig_ws.column_dimensions}
+        
+        uploaded_file.seek(0)
+        df = pd.read_excel(uploaded_file, dtype=str)
     except Exception:
-        df = pd.read_excel(uploaded_file, engine='xlrd')
+        uploaded_file.seek(0)
+        df = pd.read_excel(uploaded_file, engine='xlrd', dtype=str)
+        orig_col_widths = {}
 
     st.write("### 📄 업로드 데이터 미리보기 (상위 5건)")
     st.dataframe(df.head())
@@ -298,15 +307,10 @@ if uploaded_file is not None:
                 df.to_excel(writer, index=False)
                 worksheet = writer.sheets['Sheet1']
                 
-                for col in worksheet.columns:
-                    max_len = 0
-                    col_letter = openpyxl.utils.get_column_letter(col[0].column)
-                    for cell in col:
-                        val = str(cell.value or '')
-                        length = sum(2 if ord(char) > 127 else 1 for char in val)
-                        if length > max_len:
-                            max_len = length
-                    worksheet.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 80)
+                # 🚀 원본 엑셀 파일의 열 너비(Width)를 그대로 복사해서 적용
+                for col_letter, width in orig_col_widths.items():
+                    if width:
+                        worksheet.column_dimensions[col_letter].width = width
 
                 font_size_8 = Font(size=8)
                 for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, min_col=1, max_col=len(df.columns)):
@@ -314,10 +318,11 @@ if uploaded_file is not None:
                     for cell in row:
                         cell.font = font_size_8
                         
-                if '우편번호' in df.columns:
-                    zip_col_idx = df.columns.get_loc('우편번호') + 1
+                # 🚀 모든 셀을 텍스트 서식으로 지정하여 전화번호, 우편번호 원본 유지
+                for col_idx in range(1, len(df.columns) + 1):
                     for row in range(2, worksheet.max_row + 1):
-                        worksheet.cell(row=row, column=zip_col_idx).number_format = '@'
+                        cell = worksheet.cell(row=row, column=col_idx)
+                        cell.number_format = '@'
 
             st.session_state.excel_data = output.getvalue()
         st.success("🎉 변환 및 정리가 완료되었습니다!")
