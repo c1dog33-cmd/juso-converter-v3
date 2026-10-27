@@ -152,17 +152,23 @@ def juso_gov_converter(keyword):
     is_already_road_address = bool(re.search(r'[로길]\s*\d+', kw_str))
 
     if is_already_road_address:
+        # 신주소인 경우: 괄호 안의 법정동/아파트명 등을 깔끔하게 추출하여 [도로명주소] + [아파트명] + [동·호수] 순서로 재배치
+        # 예: 부산광역시 사하구 다대낙조2길 12 107동 1409호 ( 다대동, 도시몰운대아파트 )
+        
+        # 괄호 내용 추출
         parens = re.findall(r'\([^)]+\)', kw_str)
         apartment_name_from_paren = ""
         for p in parens:
+            # 아파트 이름이나 건물명이 포함된 괄호 탐색
             if any(term in p for term in ['아파트', '오피스텔', '빌딩', '타워', '팰리스', '시티', '파크']):
+                # 괄호 안에서 아파트 이름 추출 (예: '다대동, 도시몰운대아파트' -> '도시몰운대아파트')
                 parts_p = [item.strip() for item in p.strip('()').split(',')]
                 for ip in parts_p:
                     if any(term in ip for term in ['아파트', '오피스텔', '빌딩', '타워', '팰리스', '시티', '파크']):
-                        if ip not in kw_str:  # 이미 본문에 없을 때만 추가
-                            apartment_name_from_paren = ip
+                        apartment_name_from_paren = ip
                 kw_str = kw_str.replace(p, "").strip()
 
+        # 상세 동·호수 분리
         tail_detail = ""
         m_detail = re.search(r'(\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
         if m_detail:
@@ -171,8 +177,9 @@ def juso_gov_converter(keyword):
 
         kw_str = re.sub(r'\s+', ' ', kw_str).strip()
 
+        # 조립: [도로명주소] + [추출된 아파트명] + [동·호수]
         parts = [kw_str]
-        if apartment_name_from_paren and apartment_name_from_paren not in kw_str:
+        if apartment_name_from_paren:
             parts.append(apartment_name_from_paren)
         if tail_detail:
             parts.append(tail_detail)
