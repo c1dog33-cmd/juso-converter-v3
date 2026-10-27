@@ -251,7 +251,6 @@ st.set_page_config(page_title="주소 및 상품명 변환기", page_icon="🏛�
 st.title("🏛️ 주소 및 상품명 엑셀 자동 정제기")
 st.write("엑셀 파일을 업로드하시면 도로명주소 변환, 상세주소 우선 정렬 및 상품명 정리가 함께 수행됩니다.")
 
-# 🚀 오류 수정 완료된 파일 업로더 부분
 uploaded_file = st.file_uploader("변환할 엑셀 파일(.xlsx, .xls)을 업로드하세요", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
@@ -306,9 +305,14 @@ if uploaded_file is not None:
                 df.to_excel(writer, index=False)
                 worksheet = writer.sheets['Sheet1']
                 
+                # 1. 원본 엑셀 열 너비 먼저 적용
                 for col_letter, width in orig_col_widths.items():
                     if width:
                         worksheet.column_dimensions[col_letter].width = width
+
+                # 🚀 2. B열은 17, D열은 70으로 수동 강제 지정 (오버라이드)
+                worksheet.column_dimensions['B'].width = 17
+                worksheet.column_dimensions['D'].width = 70
 
                 font_size_8 = Font(size=8)
                 for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, min_col=1, max_col=len(df.columns)):
