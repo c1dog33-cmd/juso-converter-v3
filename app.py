@@ -41,10 +41,14 @@ def remove_duplicate_parentheses(addr_str):
 def format_dong_ho(addr_str):
     if not addr_str:
         return addr_str
+    
+    # '106-1001호' 형태를 '106동 1001호'로 자동 변환
+    addr_str = re.sub(r'\b(\d+)-(\d+호)\b', r'\1동 \2', str(addr_str))
+    
     # '107동109호' 처럼 동과 호수 사이에 공백이 없는 경우 자동 띄어쓰기 삽입
-    s = re.sub(r'(\d+동)(\d+호)', r'\1 \2', str(addr_str))
-    s = re.sub(r'([A-Z가-힣]\s*동)(\d+호)', r'\1 \2', s)
-    return s
+    addr_str = re.sub(r'(\d+동)(\d+호)', r'\1 \2', addr_str)
+    addr_str = re.sub(r'([A-Z가-힣]\s*동)(\d+호)', r'\1 \2', addr_str)
+    return addr_str
 
 def clean_product_name(val):
     if pd.isna(val) or not str(val).strip():
@@ -148,26 +152,49 @@ def juso_gov_converter(keyword):
     is_already_road_address = bool(re.search(r'[로길]\s*\d+', kw_str))
 
     if is_already_road_address:
-        cleaned = remove_duplicate_parentheses(kw_str)
-        cleaned = format_dong_ho(cleaned)
-        return ' '.join(cleaned.split())
+        parens = re.findall(r'\([^)]+\)', kw_str)
+        apartment_name_from_paren = ""
+        for p in parens:
+            if any(term in p for term in ['아파트', '오피스텔', '빌딩', '타워', '팰리스', '시티', '파크']):
+                parts_p = [item.strip() for item in p.strip('()').split(',')]
+                for ip in parts_p:
+                    if any(term in ip for term in ['아파트', '오피스텔', '빌딩', '타워', '팰리스', '시티', '파크']):
+                        if ip not in kw_str:  # 이미 본문에 없을 때만 추가
+                            apartment_name_from_paren = ip
+                kw_str = kw_str.replace(p, "").strip()
+
+        tail_detail = ""
+        m_detail = re.search(r'(\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
+        if m_detail:
+            tail_detail = m_detail.group(1).strip()
+            kw_str = kw_str[:m_detail.start()].strip()
+
+        kw_str = re.sub(r'\s+', ' ', kw_str).strip()
+
+        parts = [kw_str]
+        if apartment_name_from_paren and apartment_name_from_paren not in kw_str:
+            parts.append(apartment_name_from_paren)
+        if tail_detail:
+            parts.append(tail_detail)
+
+        final_str = ' '.join(parts)
+        final_str = remove_duplicate_parentheses(final_str)
+        final_str = format_dong_ho(final_str)
+        return ' '.join(final_str.split())
 
     # --- 구주소(지번 주소)인 경우에만 API 변환 수행 ---
     
-    # 2. 괄호 원본 분리
     parens = re.findall(r'\([^)]+\)', kw_str)
     for p in parens:
         kw_str = kw_str.replace(p, "").strip()
     paren_str = parens[-1] if parens else ""
 
-    # 3. 상세 동·호수 및 층수 분리 (정교화된 패턴 적용)
     tail_detail = ""
-    m_detail = re.search(r'(\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\d+호|\d+층)', kw_str)
+    m_detail = re.search(r'(\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
     if m_detail:
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 4. 건물명 분리 추출
     building_name = ""
     m_bldg = re.search(r'([가-힣\s0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|\d+차))\s*', kw_str)
     if m_bldg:
@@ -178,7 +205,6 @@ def juso_gov_converter(keyword):
 
     kw_str = re.sub(r'\s+', ' ', kw_str).strip()
 
-    # 5. 행정안전부 주소 API 호출 (구주소일 때만 실행)
     url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
     params = {
         "confmKey": JUSO_CONFIRM_KEY,
@@ -203,7 +229,6 @@ def juso_gov_converter(keyword):
     except Exception:
         pass
 
-    # 6. 최종 주소 조립
     parts = [base_road_addr]
     if building_name and building_name not in base_road_addr:
         parts.append(building_name)
