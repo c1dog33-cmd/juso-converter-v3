@@ -148,8 +148,10 @@ def juso_gov_converter(keyword):
         
     kw_str = str(keyword).strip()
 
-    # 1. 이미 도로명주소(신주소) 형태인지 판별
-    is_already_road_address = bool(re.search(r'[로길]\s*\d+', kw_str))
+    # 1. 이미 도로명주소(신주소) 형태인지 판별 (구로1동 같은 동 이름 오인 방지 예외 처리 포함)
+    is_already_road_address = False
+    if not (re.search(r'[로길]\s*\d+\s*[동읍면]', kw_str)):
+        is_already_road_address = bool(re.search(r'[로길]\s*\d+', kw_str))
 
     if is_already_road_address:
         parens = re.findall(r'\([^)]+\)', kw_str)
@@ -188,12 +190,10 @@ def juso_gov_converter(keyword):
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 건물명 추출 (정확한 아파트/빌라 명칭만 안전하게 분리)
+    # 건물명 추출 및 기억 (구주소에서 아파트/빌라 명칭 분리)
     building_name = ""
-    # 번지 숫자 뒤에 오는 단어들을 건물명으로 타겟팅
     m_bldg = re.search(r'\d+(?:-\d+)?\s+([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|\d+차))\b', kw_str)
     if not m_bldg:
-        # 일반적인 위치에서 후행 건물명 매칭
         m_bldg = re.search(r'([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|\d+차))\s*$', kw_str)
 
     if m_bldg:
@@ -204,7 +204,7 @@ def juso_gov_converter(keyword):
 
     kw_str = re.sub(r'\s+', ' ', kw_str).strip()
 
-    # API 요청 시에는 건물명을 뺀 '시/도 + 시/군/구 + 동 + 번지'까지만 전송하여 정확한 도로명주소 획득
+    # API 요청 시에는 건물명을 제외한 깔끔한 지번 주소만 전송
     api_keyword = kw_str
 
     url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
@@ -231,7 +231,7 @@ def juso_gov_converter(keyword):
     except Exception:
         pass
 
-    # 최종 조립 순서: [도로명주소] + [기억해 둔 건물명] + [동·호수/층]
+    # 최종 조립 순서: [도로명주소] + [건물명] + [(괄호)] + [동·호수/층]
     parts = [base_road_addr]
     if building_name and building_name not in base_road_addr:
         parts.append(building_name)
