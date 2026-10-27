@@ -190,15 +190,15 @@ def juso_gov_converter(keyword):
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 건물명 추출 및 기억 (구주소에서 아파트/빌라 명칭 분리)
+    # 건물명 추출 및 기억 (원룸, 빌라, 주택, 아파트 등 접미사 확장)
     building_name = ""
-    m_bldg = re.search(r'\d+(?:-\d+)?\s+([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|\d+차))\b', kw_str)
+    m_bldg = re.search(r'\d+(?:-\d+)?\s+([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|원룸|빌라|주택|\d+차))\b', kw_str)
     if not m_bldg:
-        m_bldg = re.search(r'([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|\d+차))\s*$', kw_str)
+        m_bldg = re.search(r'([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|원룸|빌라|주택|\d+차))\s*$', kw_str)
 
     if m_bldg:
         potential_bldg = m_bldg.group(1).strip()
-        if len(potential_bldg) >= 2 and not re.search(r'(특별시|광역시|도|시|군|구|동|읍|면|도곡리|삼덕동\d*)$', potential_bldg):
+        if len(potential_bldg) >= 2 and not re.search(r'(특별시|광역시|도|시|군|구|동|읍|면|도곡리|태화동|삼덕동\d*)$', potential_bldg):
             building_name = potential_bldg
             kw_str = kw_str.replace(building_name, "").strip()
 
