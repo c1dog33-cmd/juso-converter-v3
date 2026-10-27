@@ -310,9 +310,11 @@ if uploaded_file is not None:
                     if width:
                         worksheet.column_dimensions[col_letter].width = width
 
-                # 🚀 2. B열은 17, D열은 70으로 수동 강제 지정 (오버라이드)
-                worksheet.column_dimensions['B'].width = 17
-                worksheet.column_dimensions['D'].width = 70
+                # 🚀 2. D열(60), E열(16), G열(16), H열(11) 수동 지정 (오버라이드)
+                worksheet.column_dimensions['D'].width = 60
+                worksheet.column_dimensions['E'].width = 16
+                worksheet.column_dimensions['G'].width = 16
+                worksheet.column_dimensions['H'].width = 11
 
                 font_size_8 = Font(size=8)
                 for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, min_col=1, max_col=len(df.columns)):
