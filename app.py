@@ -137,42 +137,48 @@ def clean_product_name(val):
         
     return result_str
 
-# --- [ 행정안전부 주소정보누리집 API 연동 주소 변환 엔진 (개선됨) ] ---
+# --- [ 행정안전부 주소정보누리집 API 연동 및 스마트 판별 엔진 ] ---
 def juso_gov_converter(keyword):
     if not keyword or pd.isna(keyword):
         return keyword
         
     kw_str = str(keyword).strip()
+
+    # 1. 이미 도로명주소(신주소) 형태인지 판별
+    is_already_road_address = bool(re.search(r'[로길]\s*\d+', kw_str))
+
+    if is_already_road_address:
+        cleaned = remove_duplicate_parentheses(kw_str)
+        cleaned = format_dong_ho(cleaned)
+        return ' '.join(cleaned.split())
+
+    # --- 구주소(지번 주소)인 경우에만 API 변환 수행 ---
     
-    # 1. 괄호 원본 분리 (메모 및 기존 괄호 내용 백업)
+    # 2. 괄호 원본 분리
     parens = re.findall(r'\([^)]+\)', kw_str)
     for p in parens:
         kw_str = kw_str.replace(p, "").strip()
     paren_str = parens[-1] if parens else ""
 
-    # 2. 상세 동·호수 및 층수 분리 (예: 102동 1303호 등)
+    # 3. 상세 동·호수 및 층수 분리 (정교화된 패턴 적용)
     tail_detail = ""
-    m_detail = re.search(r'(\d+동\s*\d+호.*|[A-Z가-힣]\s*동\s*\d+호.*|\d+\s*호.*|\d+층.*)', kw_str)
+    m_detail = re.search(r'(\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\d+호|\d+층)', kw_str)
     if m_detail:
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 3. 건물명 분리 추출 (예: 삼덕청아람리슈빌, 다산 헤리움 그랑비스타 2차 등)
-    # 번지(숫자) 앞이나 주소 중간에 위치한 아파트/오피스텔/건물 이름 추출
+    # 4. 건물명 분리 추출
     building_name = ""
     m_bldg = re.search(r'([가-힣\s0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|\d+차))\s*', kw_str)
     if m_bldg:
         potential_bldg = m_bldg.group(1).strip()
-        # 시/도, 구, 동 이름이 건물명으로 오인되지 않게 최소 길이 조건 체크
         if len(potential_bldg) >= 2 and not re.search(r'(특별시|광역시|도|시|군|구|동|읍|면)$', potential_bldg):
             building_name = potential_bldg
-            # API 검색어에서는 건물명을 제외하고 순수 기본 주소(동 + 번지까지)만 남김
             kw_str = kw_str.replace(building_name, "").strip()
 
-    # 번지 형태까지만 깔끔하게 정돈 (예: 삼덕동3가 383 까지만 남김)
     kw_str = re.sub(r'\s+', ' ', kw_str).strip()
 
-    # 4. 행정안전부 주소 API 호출 (순수 기본 주소로 검색)
+    # 5. 행정안전부 주소 API 호출 (구주소일 때만 실행)
     url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
     params = {
         "confmKey": JUSO_CONFIRM_KEY,
@@ -197,16 +203,12 @@ def juso_gov_converter(keyword):
     except Exception:
         pass
 
-    # 5. 최종 주소 조립: [도로명주소] + [건물명(API 결과에 없을 때만)] + [동·호수] + [괄호메모]
+    # 6. 최종 주소 조립
     parts = [base_road_addr]
-    
-    # API 결과에 건물명이 포함되어 있지 않고, 추출해 둔 건물명이 있다면 추가
     if building_name and building_name not in base_road_addr:
         parts.append(building_name)
-        
     if tail_detail:
         parts.append(tail_detail)
-        
     if paren_str and paren_str not in base_road_addr:
         parts.append(paren_str)
 
