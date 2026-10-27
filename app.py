@@ -141,7 +141,7 @@ def clean_product_name(val):
         
     return result_str
 
-# --- [ 행정안전부 주소정보누리집 API 연동 및 하이브리드 엔진 ] ---
+# --- [ 행정안전부 주소정보누리집 API 연동 및 맞춤형 포맷 엔진 ] ---
 def juso_gov_converter(keyword):
     if not keyword or pd.isna(keyword):
         return keyword
@@ -152,19 +152,22 @@ def juso_gov_converter(keyword):
     is_already_road_address = bool(re.search(r'[로길]\s*\d+', kw_str))
 
     if is_already_road_address:
+        # 괄호 내용 통째로 추출
         parens = re.findall(r'\([^)]+\)', kw_str)
         paren_str = parens[-1] if parens else ""
         for p in parens:
             kw_str = kw_str.replace(p, "").strip()
 
+        # 상세 동·호수 및 층수 추출 (층+호 복합 기재 패턴 \d+층\s*\d+호 포함)
         tail_detail = ""
-        m_detail = re.search(r'(\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
+        m_detail = re.search(r'(\d+층\s*\d+호|\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
         if m_detail:
             tail_detail = m_detail.group(1).strip()
             kw_str = kw_str[:m_detail.start()].strip()
 
         kw_str = re.sub(r'\s+', ' ', kw_str).strip()
 
+        # 조립 순서: [도로명주소] + [(법정동, 건물명)] + [동·호수/층]
         parts = [kw_str]
         if paren_str:
             parts.append(paren_str)
@@ -176,37 +179,30 @@ def juso_gov_converter(keyword):
         final_str = format_dong_ho(final_str)
         return ' '.join(final_str.split())
 
-    # --- 구주소(지번 주소)인 경우: 아파트 이름을 포함한 채로 API 요청하되, 원본 건물명을 확실히 기억해 둠 ---
-    
-    # 2. 괄호 내용 통째로 백업 (예: ( 삼계동, 삼계이안아파트 ) 등)
+    # --- 구주소(지번 주소)인 경우 API 변환 수행 후 동일 순서로 조립 ---
     parens = re.findall(r'\([^)]+\)', kw_str)
     paren_str = parens[-1] if parens else ""
     for p in parens:
         kw_str = kw_str.replace(p, "").strip()
 
-    # 3. 상세 동·호수 분리
     tail_detail = ""
-    m_detail = re.search(r'(\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
+    m_detail = re.search(r'(\d+층\s*\d+호|\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
     if m_detail:
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 4. 원본 문자열에서 아파트/건물 이름 추출 및 기억 (API에는 아파트 이름을 포함해서 보냄)
-    # 아파트 이름을 잘라내지 않고 그대로 API 검색어(api_keyword)로 사용
-    api_keyword = kw_str 
-    api_keyword = re.sub(r'\s+', ' ', api_keyword).strip()
+    kw_str = re.sub(r'\s+', ' ', kw_str).strip()
 
-    # 행정안전부 주소 API 호출 (아파트 이름이 포함된 전체 지번 주소로 요청)
     url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
     params = {
         "confmKey": JUSO_CONFIRM_KEY,
         "currentPage": 1,
         "countPerPage": 1,
-        "keyword": api_keyword,
+        "keyword": kw_str,
         "resultType": "json"
     }
     
-    base_road_addr = api_keyword
+    base_road_addr = kw_str
     try:
         response = requests.get(url, params=params, timeout=5)
         if response.status_code == 200:
@@ -221,7 +217,6 @@ def juso_gov_converter(keyword):
     except Exception:
         pass
 
-    # 5. 최종 조립 순서: [도로명주소] + [(법정동, 건물명/괄호)] + [동·호수]
     parts = [base_road_addr]
     if paren_str and paren_str not in base_road_addr:
         parts.append(paren_str)
