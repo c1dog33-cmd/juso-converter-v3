@@ -60,23 +60,30 @@ def clean_product_name(val):
         has_film = True
 
     target_texts = [s]
-    if '//' in s: target_texts.insert(0, s.split('//')[-1])
+    # 🚀 '모델선택_' 및 '모델선택:'이 포함된 경우 상세 옵션 영역을 최우선으로 추출하도록 수정
+    if '모델선택_' in s: target_texts.insert(0, s.split('모델선택_')[-1])
     if '모델선택:' in s: target_texts.insert(0, s.split('모델선택:')[-1])
+    if '//' in s: target_texts.insert(0, s.split('//')[-1])
     if '/' in s: target_texts.insert(0, s.split('/')[-1])
 
     smartphone_match = None
+    # 🚀 상세 기종명(울트라, 플러스 등)을 단독 기종보다 앞에 배치하여 우선 매칭
+    pattern = r'(S\s*21\s*울트라|S\s*21\s*플러스|S\s*20\s*플러스|S\s*20\s*울트라|S\s*22\s*플러스|S\s*22\s*울트라|노트\s*10\s*플러스|노트\s*20\s*울트라|노트\s*20\s*플러스|노트\s*\d+\s*울트라|노트\s*\d+\s*플러스|노트\s*\d+|S\s*10\s*5G|S\s*\d+(?:\s*플러스|\s*울트라|\s*5G|\s*엣지)?|A\s*\d+|Z\s*(?:플립|폴드)\s*\d*|와이드\s*\d+|N\s*\d+|V\s*50S|V\s*50|V\s*\d+|벨벳|윙)'
+
     for t in target_texts:
-        smartphone_match = re.search(r'(S\s*10\s*5G|S\s*10\s*플러스|S\s*20\s*플러스|S\s*20\s*울트라|S\s*22\s*플러스|S\s*22\s*울트라|노트\s*10\s*플러스|노트\s*20\s*울트라|노트\s*20\s*플러스|노트\s*\d+\s*울트라|노트\s*\d+\s*플러스|노트\s*\d+|S\s*\d+(?:\s*플러스|\s*울트라|\s*5G|\s*엣지)?|A\s*\d+|Z\s*(?:플립|폴드)\s*\d*|와이드\s*\d+|N\s*\d+|V\s*50S|V\s*50|V\s*\d+|벨벳|윙)', t, re.IGNORECASE)
+        smartphone_match = re.search(pattern, t, re.IGNORECASE)
         if smartphone_match: break
 
     if not smartphone_match:
-        smartphone_match = re.search(r'(S\s*10\s*5G|S\s*10\s*플러스|S\s*20\s*플러스|S\s*20\s*울트라|S\s*22\s*플러스|S\s*22\s*울트라|노트\s*10\s*플러스|노트\s*20\s*울트라|노트\s*20\s*플러스|노트\s*\d+\s*울트라|노트\s*\d+\s*플러스|노트\s*\d+|S\s*\d+(?:\s*플러스|\s*울트라|\s*5G|\s*엣지)?|A\s*\d+|Z\s*(?:플립|폴드)\s*\d*|와이드\s*\d+|N\s*\d+|V\s*50S|V\s*50|V\s*\d+|벨벳|윙)', s, re.IGNORECASE)
+        smartphone_match = re.search(pattern, s, re.IGNORECASE)
 
     if smartphone_match:
         raw_model = smartphone_match.group(1).replace(" ", "").upper()
         if raw_model == 'S105G': target_model = 'S10 5G'
         elif raw_model == 'S10플러스': target_model = 'S10플러스'
         elif raw_model == 'S20플러스': target_model = 'S20플러스'
+        elif raw_model == 'S21플러스': target_model = 'S21플러스'
+        elif raw_model == 'S21울트라': target_model = 'S21울트라'
         elif raw_model == 'S22플러스': target_model = 'S22플러스'
         elif raw_model == '노트10플러스': target_model = '노트10플러스'
         elif raw_model in ['N960', 'SM-N960']: target_model = '노트9'
@@ -85,7 +92,7 @@ def clean_product_name(val):
         elif raw_model == '노트20울트라': target_model = '노트20울트라'
         elif raw_model == '와이드5': target_model = 'A22'
         elif raw_model == '와이드6': target_model = 'A13'
-        else: target_model = raw_model
+        else: target_model = smartphone_match.group(1).strip()
 
         qty = 1
         if '☞' in s:
@@ -93,6 +100,8 @@ def clean_product_name(val):
             after = parts[1].strip() if len(parts) > 1 else ""
             qty_match = re.match(r'^(\d+)\s*(EA|개)?', after, re.IGNORECASE)
             if qty_match: qty = int(qty_match.group(1))
+        elif '/2개' in s or '2개' in s:
+            qty = 2
         
         res = f"{target_model}[{qty}]" if qty > 1 else target_model
         if has_film: res += " +필름"
@@ -148,7 +157,7 @@ def juso_gov_converter(keyword):
         
     kw_str = str(keyword).strip()
 
-    # 1. 이미 도로명주소(신주소) 형태인지 판별 (구로1동 같은 동 이름 오인 방지 예외 처리 포함)
+    # 1. 이미 도로명주소(신주소) 형태인지 판별
     is_already_road_address = False
     if not (re.search(r'[로길]\s*\d+\s*[동읍면]', kw_str)):
         is_already_road_address = bool(re.search(r'[로길]\s*\d+', kw_str))
@@ -190,7 +199,6 @@ def juso_gov_converter(keyword):
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
 
-    # 건물명 추출 및 기억 (강변타운, 타운, 원룸, 빌라, 주택, 아파트 등 접미사 확장)
     building_name = ""
     m_bldg = re.search(r'\d+(?:-\d+)?\s+([가-힣0-9]+(?:아파트|오피스텔|타워|빌딩|스퀘어|프라자|파크|시티|팰리스|마크|하우스|그랑비스타|헤리움|칸타빌|주공|빌|리슈빌|원룸|빌라|주택|강변타운|타운|\d+차))\b', kw_str)
     if not m_bldg:
@@ -203,8 +211,6 @@ def juso_gov_converter(keyword):
             kw_str = kw_str.replace(building_name, "").strip()
 
     kw_str = re.sub(r'\s+', ' ', kw_str).strip()
-
-    # API 요청 시에는 건물명을 제외한 깔끔한 지번 주소만 전송
     api_keyword = kw_str
 
     url = "https://www.juso.go.kr/addrlink/addrLinkApi.do"
@@ -231,7 +237,6 @@ def juso_gov_converter(keyword):
     except Exception:
         pass
 
-    # 최종 조립 순서: [도로명주소] + [건물명] + [(괄호)] + [동·호수/층]
     parts = [base_road_addr]
     if building_name and building_name not in base_road_addr:
         parts.append(building_name)
@@ -305,12 +310,10 @@ if uploaded_file is not None:
                 df.to_excel(writer, index=False)
                 worksheet = writer.sheets['Sheet1']
                 
-                # 1. 원본 엑셀 열 너비 먼저 적용
                 for col_letter, width in orig_col_widths.items():
                     if width:
                         worksheet.column_dimensions[col_letter].width = width
 
-                # 🚀 2. D열(60), E열(16), G열(16), H열(11) 수동 지정 (오버라이드)
                 worksheet.column_dimensions['D'].width = 60
                 worksheet.column_dimensions['E'].width = 16
                 worksheet.column_dimensions['G'].width = 16
