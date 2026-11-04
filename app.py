@@ -61,12 +61,14 @@ def clean_product_name(val):
         has_film = True
 
     target_texts = [s]
+    # 🚀 '모델선택_' 및 '모델선택:'이 포함된 경우 상세 옵션 영역을 최우선으로 추출하도록 수정
     if '모델선택_' in s: target_texts.insert(0, s.split('모델선택_')[-1])
     if '모델선택:' in s: target_texts.insert(0, s.split('모델선택:')[-1])
     if '//' in s: target_texts.insert(0, s.split('//')[-1])
     if '/' in s: target_texts.insert(0, s.split('/')[-1])
 
     smartphone_match = None
+    # 🚀 상세 기종명(울트라, 플러스 등)을 단독 기종보다 앞에 배치하여 우선 매칭
     pattern = r'(S\s*21\s*울트라|S\s*21\s*플러스|S\s*20\s*플러스|S\s*20\s*울트라|S\s*22\s*플러스|S\s*22\s*울트라|노트\s*10\s*플러스|노트\s*20\s*울트라|노트\s*20\s*플러스|노트\s*\d+\s*울트라|노트\s*\d+\s*플러스|노트\s*\d+|S\s*10\s*5G|S\s*\d+(?:\s*플러스|\s*울트라|\s*5G|\s*엣지)?|A\s*\d+|Z\s*(?:플립|폴드)\s*\d*|와이드\s*\d+|N\s*\d+|V\s*50S|V\s*50|V\s*\d+|벨벳|윙)'
 
     for t in target_texts:
