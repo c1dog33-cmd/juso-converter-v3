@@ -45,9 +45,10 @@ def format_dong_ho(addr_str):
     # '106-1001호' 형태를 '106동 1001호'로 자동 변환
     addr_str = re.sub(r'\b(\d+)-(\d+호)\b', r'\1동 \2', str(addr_str))
     
-    # '107동109호' 처럼 동과 호수 사이에 공백이 없는 경우 자동 띄어쓰기 삽입
+    # 🚀 동(숫자, 알파벳, 한글)과 호수 사이에 공백이 없는 경우 자동 띄어쓰기 삽입 (예: A동303호, 가동101호)
     addr_str = re.sub(r'(\d+동)(\d+호)', r'\1 \2', addr_str)
     addr_str = re.sub(r'([A-Z가-힣]\s*동)(\d+호)', r'\1 \2', addr_str)
+    addr_str = re.sub(r'([A-Z가-힣]동)(\d+호)', r'\1 \2', addr_str)
     return addr_str
 
 def clean_product_name(val):
@@ -60,14 +61,12 @@ def clean_product_name(val):
         has_film = True
 
     target_texts = [s]
-    # 🚀 '모델선택_' 및 '모델선택:'이 포함된 경우 상세 옵션 영역을 최우선으로 추출하도록 수정
     if '모델선택_' in s: target_texts.insert(0, s.split('모델선택_')[-1])
     if '모델선택:' in s: target_texts.insert(0, s.split('모델선택:')[-1])
     if '//' in s: target_texts.insert(0, s.split('//')[-1])
     if '/' in s: target_texts.insert(0, s.split('/')[-1])
 
     smartphone_match = None
-    # 🚀 상세 기종명(울트라, 플러스 등)을 단독 기종보다 앞에 배치하여 우선 매칭
     pattern = r'(S\s*21\s*울트라|S\s*21\s*플러스|S\s*20\s*플러스|S\s*20\s*울트라|S\s*22\s*플러스|S\s*22\s*울트라|노트\s*10\s*플러스|노트\s*20\s*울트라|노트\s*20\s*플러스|노트\s*\d+\s*울트라|노트\s*\d+\s*플러스|노트\s*\d+|S\s*10\s*5G|S\s*\d+(?:\s*플러스|\s*울트라|\s*5G|\s*엣지)?|A\s*\d+|Z\s*(?:플립|폴드)\s*\d*|와이드\s*\d+|N\s*\d+|V\s*50S|V\s*50|V\s*\d+|벨벳|윙)'
 
     for t in target_texts:
@@ -162,6 +161,9 @@ def juso_gov_converter(keyword):
     if not (re.search(r'[로길]\s*\d+\s*[동읍면]', kw_str)):
         is_already_road_address = bool(re.search(r'[로길]\s*\d+', kw_str))
 
+    # 🚀 상세 주소(숫자동, 알파벳동[A동], 한글동[가동] 및 호수/층) 탐지 패턴 확장
+    detail_regex = r'(\d+층\s*\d+호|[A-Z가-힣]\s*동\s*\d+호|\d+동\s*\d+호|\d+동\s*\d+-\d+호|[A-Z가-힣]\s*동\s*\d+층|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층|[A-Z가-힣]\s*동)'
+
     if is_already_road_address:
         parens = re.findall(r'\([^)]+\)', kw_str)
         paren_str = parens[-1] if parens else ""
@@ -169,7 +171,7 @@ def juso_gov_converter(keyword):
             kw_str = kw_str.replace(p, "").strip()
 
         tail_detail = ""
-        m_detail = re.search(r'(\d+층\s*\d+호|\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
+        m_detail = re.search(detail_regex, kw_str)
         if m_detail:
             tail_detail = m_detail.group(1).strip()
             kw_str = kw_str[:m_detail.start()].strip()
@@ -194,7 +196,7 @@ def juso_gov_converter(keyword):
         kw_str = kw_str.replace(p, "").strip()
 
     tail_detail = ""
-    m_detail = re.search(r'(\d+층\s*\d+호|\d+동\s*\d+호|\d+동\s*\d+-\d+호|\d+동\s*\d+층|\d+-\d+호|\b\d+-\d+\b호|\d+호|\d+층)', kw_str)
+    m_detail = re.search(detail_regex, kw_str)
     if m_detail:
         tail_detail = m_detail.group(1).strip()
         kw_str = kw_str[:m_detail.start()].strip()
