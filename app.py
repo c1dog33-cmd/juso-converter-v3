@@ -6,7 +6,7 @@ import pandas as pd
 import requests
 import streamlit as st
 from openpyxl.styles import Font
-import gc  # 🚀 메모리 가비지 컬렉션을 위한 모듈 추가
+import gc
 
 # 🚀 행정안전부 도로명주소 오픈 API 승인키 적용 완료
 JUSO_CONFIRM_KEY = "U01TX0FVVEgyMDI2MTAyMzE3MDUxMjEyMDgzMzI="  
@@ -260,6 +260,7 @@ st.write("엑셀 파일을 업로드하시면 도로명주소 변환, 상세주�
 uploaded_file = st.file_uploader("변환할 엑셀 파일(.xlsx, .xls)을 업로드하세요", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
+    orig_wb = None
     try:
         orig_wb = openpyxl.load_workbook(uploaded_file)
         orig_ws = orig_wb.active
@@ -333,9 +334,10 @@ if uploaded_file is not None:
 
             st.session_state.excel_data = output.getvalue()
 
-            # 🚀 엑셀 변환 완료 직후 사용된 대형 객체 메모리 해제 및 가비지 컬렉션 수행
+            # 🚀 안전하게 메모리 해제 처리
             del df
-            del orig_wb
+            if orig_wb is not None:
+                del orig_wb
             gc.collect()
 
         st.success("🎉 변환 및 정리가 완료되었습니다!")
